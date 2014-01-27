@@ -1,4 +1,4 @@
-package glacier_pipe;
+package glacierpipe;
 
 public interface GlacierPipeObserver {
 

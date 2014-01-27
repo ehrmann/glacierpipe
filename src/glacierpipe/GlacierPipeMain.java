@@ -1,8 +1,8 @@
-package glacier_pipe;
+package glacierpipe;
 
-import glacier_pipe.io.IOBuffer;
-import glacier_pipe.io.MemoryIOBuffer;
-import glacier_pipe.terminal.TerminalGlacierPipeObserver;
+import glacierpipe.io.IOBuffer;
+import glacierpipe.io.MemoryIOBuffer;
+import glacierpipe.terminal.TerminalGlacierPipeObserver;
 
 import java.io.BufferedInputStream;
 import java.io.FileInputStream;

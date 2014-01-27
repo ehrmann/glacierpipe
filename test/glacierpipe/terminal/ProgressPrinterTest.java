@@ -1,4 +1,6 @@
-package glacier_pipe.terminal;
+package glacierpipe.terminal;
+
+import glacierpipe.terminal.ProgressPrinter;
 
 import java.io.PrintWriter;
 

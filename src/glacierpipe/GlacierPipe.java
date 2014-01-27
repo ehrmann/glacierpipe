@@ -1,10 +1,10 @@
-package glacier_pipe;
+package glacierpipe;
 
-import glacier_pipe.io.IOBuffer;
-import glacier_pipe.io.InputStreamObserver;
-import glacier_pipe.io.ObservedInputStream;
-import glacier_pipe.io.ObservedOutputStream;
-import glacier_pipe.io.OutputStreamObserver;
+import glacierpipe.io.IOBuffer;
+import glacierpipe.io.InputStreamObserver;
+import glacierpipe.io.ObservedInputStream;
+import glacierpipe.io.ObservedOutputStream;
+import glacierpipe.io.OutputStreamObserver;
 
 import java.io.IOException;
 import java.io.InputStream;

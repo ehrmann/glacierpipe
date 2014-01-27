@@ -1,4 +1,4 @@
-package glacier_pipe;
+package glacierpipe;
 
 import java.security.MessageDigest;
 import java.util.ArrayList;

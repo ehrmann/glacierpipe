@@ -1,4 +1,4 @@
-package glacier_pipe.io;
+package glacierpipe.io;
 
 public interface InputStreamObserver extends StreamObserver {
 

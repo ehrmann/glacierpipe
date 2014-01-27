@@ -1,4 +1,6 @@
-package glacier_pipe.terminal;
+package glacierpipe.terminal;
+
+import glacierpipe.terminal.TerminalGlacierPipeObserver;
 
 import java.io.IOException;
 import java.io.PrintWriter;

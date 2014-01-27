@@ -1,4 +1,4 @@
-package glacier_pipe.io;
+package glacierpipe.io;
 
 import java.io.FilterInputStream;
 import java.io.IOException;
