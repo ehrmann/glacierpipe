@@ -7,5 +7,12 @@ Its arguments are compatible with [MoriTanosuke's glacieruploader](https://githu
 Typical use:
 
 ```
-tar -c <directory> | xz | java ... glacierpipe.GlacierPipeMain --upload --endpoint us-east-1 --partsize 33554432 --vault <vault name> <archive name>
+tar -c <directory> | \
+xz | \
+java ... glacierpipe.GlacierPipeMain \
+    --upload \
+    --endpoint us-east-1 \
+    --partsize 33554432 \
+    --vault <vault name> \
+    <archive name>.tar.xz
 ```
