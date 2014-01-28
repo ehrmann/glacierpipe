@@ -117,7 +117,7 @@ public class GlacierPipeMain {
 			IOBuffer buffer = new MemoryIOBuffer(partSize);
 			
 			// Vault name
-			String vault = (String)cmd.getParsedOptionValue("vault");
+			String vault = (String)cmd.getOptionValue("vault");
 			
 			// Archive name
 			List<?> archiveList = cmd.getArgList();
@@ -142,7 +142,7 @@ public class GlacierPipeMain {
 			AmazonGlacierClient client = new AmazonGlacierClient(new BasicAWSCredentials(accessKey, secretKey));
 			client.setEndpoint(endpoint);
 
-			// Actuall upload
+			// Actual upload
 			try (
 					InputStream in = new BufferedInputStream(System.in, 4096);
 					PrintWriter writer = new PrintWriter(System.err);

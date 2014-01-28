@@ -47,7 +47,7 @@ import com.amazonaws.util.BinaryUtils;
 
 public class GlacierPipe {
 
-	final int maxRetries = 15;
+	final int maxRetries = 1000;
 
 	final long partSize;
 	final IOBuffer buffer;
