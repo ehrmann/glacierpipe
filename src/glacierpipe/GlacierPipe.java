@@ -47,13 +47,13 @@ import com.amazonaws.util.BinaryUtils;
 
 public class GlacierPipe {
 
-	final int maxRetries = 1000;
+	protected final int maxRetries;
 
-	final long partSize;
-	final IOBuffer buffer;
+	protected final long partSize;
+	protected final IOBuffer buffer;
 	protected final GlacierPipeObserver observer;
 
-	public GlacierPipe(IOBuffer buffer, GlacierPipeObserver observer) {
+	public GlacierPipe(IOBuffer buffer, GlacierPipeObserver observer, int maxRetries) {
 		long partSize = buffer.getCapacity();
 
 		if (partSize < 0) {
@@ -62,11 +62,14 @@ public class GlacierPipe {
 			throw new IllegalArgumentException("partSize larger than 4GB");
 		} else if (!isPowerOfTwo(partSize) || partSize % (1024 * 1024) != 0) {
 			throw new IllegalArgumentException("partSize not 1MB * 2^n");
+		} else if (maxRetries < 1) {
+			throw new IllegalArgumentException("maxRetries must be at least 1");
 		}
 
 		this.partSize = partSize;
 		this.buffer = buffer;
 		this.observer = observer;
+		this.maxRetries = maxRetries;
 	}
 
 	public String pipe(AmazonGlacierClient client, String vaultName, String archiveDesc, InputStream in) throws IOException {

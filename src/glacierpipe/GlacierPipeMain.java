@@ -83,6 +83,13 @@ public class GlacierPipeMain {
 		OptionBuilder.withDescription("the size of each part for multipart uploads.  Must be a power of 2 between (inclusive) 1MB and 4GB (default: 16MB)");
 		OptionBuilder.hasArg();
 		OPTIONS.addOption(OptionBuilder.create("p"));
+		
+		OptionBuilder.withLongOpt("max-retries");
+		OptionBuilder.withArgName("count");
+		OptionBuilder.withType(Number.class);
+		OptionBuilder.withDescription("the maximum number of times to retry uploading a chunk");
+		OptionBuilder.hasArg();
+		OPTIONS.addOption(OptionBuilder.create("r"));
 
 		OPTIONS.addOption(null, "credentials", true, "path to your aws credentials file (default: $HOME/aws.properties)");
 	}
@@ -109,6 +116,13 @@ public class GlacierPipeMain {
 			// Set up the part size
 			long partSize = (Long)cmd.getParsedOptionValue("partsize");
 			IOBuffer buffer = new MemoryIOBuffer(partSize);
+			
+			// How many times should we retry the upload?
+			// At ~5 min between attempts, 1000 works out to 3.5 days
+			int maxRetries = 1000;
+			if (cmd.getParsedOptionValue("max-retries") != null) {
+				maxRetries = ((Number)cmd.getParsedOptionValue("max-retries")).intValue();
+			}
 			
 			// Vault name
 			String vault = (String)cmd.getOptionValue("vault");
@@ -142,7 +156,7 @@ public class GlacierPipeMain {
 					PrintWriter writer = new PrintWriter(System.err);
 			) {
 				TerminalGlacierPipeObserver observer = new TerminalGlacierPipeObserver(writer);
-				GlacierPipe pipe = new GlacierPipe(buffer, observer);
+				GlacierPipe pipe = new GlacierPipe(buffer, observer, maxRetries);
 				pipe.pipe(client, vault, archive, in);
 			}
 			
