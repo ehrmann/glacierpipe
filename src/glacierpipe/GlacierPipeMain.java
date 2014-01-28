@@ -32,6 +32,7 @@ import java.io.PrintWriter;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Properties;
 import java.util.TreeMap;
 
@@ -92,15 +93,8 @@ public class GlacierPipeMain {
 		CommandLine cmd = parser.parse(OPTIONS, args);
 		
 		if (cmd.hasOption("help")) {
-			HelpFormatter formatter = new HelpFormatter();
 			try (PrintWriter writer = new PrintWriter(System.err)) {
-				formatter.printHelp(writer, HelpFormatter.DEFAULT_WIDTH,
-						"<other-command> ... | java -jar glacierpipe.jar [--help | --upload] -e <glacier-endpoint> -v <vault-nane> <archive-name>",
-						null,
-						 OPTIONS,
-						 HelpFormatter.DEFAULT_LEFT_PAD,
-						 HelpFormatter.DEFAULT_DESC_PAD,
-						 null);
+				printHelp(writer);
 			}
 
 			System.exit(0);
@@ -158,5 +152,23 @@ public class GlacierPipeMain {
 			
 			System.exit(-1);
 		}
+	}
+	
+	public static void printHelp(PrintWriter writer) {
+		HelpFormatter formatter = new HelpFormatter();
+		formatter.printHelp(writer, HelpFormatter.DEFAULT_WIDTH,
+				"<other-command> ... | java -jar glacierpipe.jar [--help | --upload] -e <glacier-endpoint> -v <vault-nane> <archive-name>",
+				null,
+				 OPTIONS,
+				 HelpFormatter.DEFAULT_LEFT_PAD,
+				 HelpFormatter.DEFAULT_DESC_PAD,
+				 null);
+		
+		writer.printf("%nBuild-in endpoint aliases:%n%n");
+		for (Entry<String, String> entry : GLACIER_ENDPOINTS.entrySet()) {
+			writer.printf("  %20s %s%n", entry.getKey() + " ->", entry.getValue());
+		}
+		
+		writer.flush();
 	}
 }
