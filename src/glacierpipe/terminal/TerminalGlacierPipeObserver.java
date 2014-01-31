@@ -137,7 +137,6 @@ public class TerminalGlacierPipeObserver implements GlacierPipeObserver {
 		writer.print(" in ");
 		Util.printTime(writer, System.currentTimeMillis() - startTime, false);
 		
-		// FIXME: this said 0 B/s
 		writer.print(" (");
 		writer.print(Util.toHumanReadableDataSize(totalBytes / ((System.currentTimeMillis() - startTime) / 1000)));
 		writer.println(")/s");
