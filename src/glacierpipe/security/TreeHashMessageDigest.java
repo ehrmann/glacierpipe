@@ -17,7 +17,7 @@
  * under the License.
  */
 
-package glacierpipe;
+package glacierpipe.security;
 
 import java.security.MessageDigest;
 import java.util.ArrayList;

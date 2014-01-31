@@ -24,6 +24,7 @@ import glacierpipe.io.InputStreamObserver;
 import glacierpipe.io.ObservedInputStream;
 import glacierpipe.io.ObservedOutputStream;
 import glacierpipe.io.OutputStreamObserver;
+import glacierpipe.security.TreeHashMessageDigest;
 
 import java.io.IOException;
 import java.io.InputStream;

@@ -1,7 +1,7 @@
-package glacierpipe;
+package glacierpipe.security;
 
 import static org.junit.Assert.assertArrayEquals;
-import glacierpipe.TreeHashMessageDigest;
+import glacierpipe.security.TreeHashMessageDigest;
 
 import java.io.ByteArrayInputStream;
 import java.security.MessageDigest;
