@@ -139,7 +139,7 @@ public class TerminalGlacierPipeObserver implements GlacierPipeObserver {
 		
 		// FIXME: this said 0 B/s
 		writer.print(" (");
-		writer.print(Util.toHumanReadableDataSize(totalBytes / (System.currentTimeMillis() - startTime) / 1000));
+		writer.print(Util.toHumanReadableDataSize(totalBytes / ((System.currentTimeMillis() - startTime) / 1000)));
 		writer.println(")/s");
 		
 		writer.print("  Tree Hash: 0x");
