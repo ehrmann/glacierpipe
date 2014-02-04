@@ -3,6 +3,7 @@ package glacierpipe.io;
 import java.io.FilterInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.Objects;
 
 public class ThrottledInputStream extends FilterInputStream {
 
@@ -10,18 +11,37 @@ public class ThrottledInputStream extends FilterInputStream {
 	
 	long lastUsed = 0;
 	long[] usage = new long[10];
+	protected final ThrottlingStrategy throttlingStrategy;
 	
-	protected ThrottledInputStream(InputStream in, double bytesPerSecond) {
+	public ThrottledInputStream(InputStream in, double bytesPerSecond) {
 		super(in);
 		this.setBytesPerSecond(bytesPerSecond);
+		this.throttlingStrategy = null;
+	}
+	
+	public ThrottledInputStream(InputStream in, ThrottlingStrategy throttlingStrategy) {
+		super(in);
+		this.throttlingStrategy = Objects.requireNonNull(throttlingStrategy, "throttlingStrategy was null");
+		this.setBytesPerSecond();
 	}
 
 	public void setBytesPerSecond(double bytesPerSecond) {
-		if (bytesPerSecond <= 0) {
+		if (this.throttlingStrategy != null) {
+			throw new IllegalStateException("setBytesPerSecond called when a ThrottlingStrategy was provided");
+		} else if (bytesPerSecond <= 0) {
 			throw new IllegalArgumentException("bytesPerSecond was negative");
 		} else if (Double.isNaN(bytesPerSecond)) {
 			throw new IllegalArgumentException("bytesPerSecond was NaN");
 		} else if (Double.isInfinite(bytesPerSecond)) {
+			this.budget = Long.MAX_VALUE;
+		} else {
+			this.budget = Math.max(0, Math.round(bytesPerSecond / usage.length));
+		}
+	}
+	
+	public void setBytesPerSecond() {
+		double bytesPerSecond = throttlingStrategy.getBytesPerSecond();
+		if (bytesPerSecond <= 0 || Double.isInfinite(bytesPerSecond) || Double.isNaN(bytesPerSecond)) {
 			this.budget = Long.MAX_VALUE;
 		} else {
 			this.budget = Math.max(0, Math.round(bytesPerSecond / usage.length));
@@ -39,6 +59,10 @@ public class ThrottledInputStream extends FilterInputStream {
 				}
 				return r;
 			} else {
+				if (this.throttlingStrategy != null) {
+					this.setBytesPerSecond();
+				}
+				
 				sleepUntilNextChunk(now);
 			}
 		}
@@ -56,6 +80,10 @@ public class ThrottledInputStream extends FilterInputStream {
 				}
 				return r;
 			} else {
+				if (this.throttlingStrategy != null) {
+					this.setBytesPerSecond();
+				}
+				
 				sleepUntilNextChunk(now);
 			}
 		}
@@ -95,5 +123,11 @@ public class ThrottledInputStream extends FilterInputStream {
 		} catch (InterruptedException e) {
 			throw new IOException(e);
 		}
+	}
+	
+	public interface ThrottlingStrategy {
+		
+		double getBytesPerSecond();
+		
 	}
 }
