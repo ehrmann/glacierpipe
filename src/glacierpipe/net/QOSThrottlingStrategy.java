@@ -6,6 +6,7 @@ import java.net.URL;
 import java.util.Objects;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -13,20 +14,19 @@ import glacierpipe.io.ThrottledInputStream.ThrottlingStrategy;
 
 public class QOSThrottlingStrategy implements ThrottlingStrategy, AutoCloseable {
 
-	protected final int historyLength;
 	protected final ScheduledExecutorService executor = Executors.newSingleThreadScheduledExecutor();
 	protected final URL url;
 	
-	protected double rate = 2048.0;
-	
-	protected final AtomicReference<Stats> stats = new AtomicReference<QOSThrottlingStrategy.Stats>(new Stats(0, Double.MAX_VALUE, 0));
-
+	protected final AtomicReference<Stats> stats = new AtomicReference<Stats>();
+	protected ScheduledFuture<?> workerFuture = null;
 	protected Stats baselineStats = null;
 	
+	protected double rate = 2048.0;
+	
+	protected State state = States.BASELINING;
 	
 	public QOSThrottlingStrategy(URL url) {
 		this.url = Objects.requireNonNull(url, "url was null");
-		executor.scheduleWithFixedDelay(new Worker(), 0, 800, TimeUnit.MILLISECONDS);
 	}
 
 	@Override
@@ -36,20 +36,7 @@ public class QOSThrottlingStrategy implements ThrottlingStrategy, AutoCloseable 
 
 	@Override
 	public double getBytesPerSecond() {
-		Stats stats = this.stats.getAndSet(null);
-		if (stats != null) {
-			if (this.baselineStats == null) {
-				if (stats.samples == historyLength) {
-					this.baselineStats = stats;
-				}
-			} else {
-				if and last 5 all in 3 stddevs, increase
-				if last 5 all outside 2 stddevs, decrase
-				
-				
-			}
-		}
-
+		this.state = state.process(this);
 		return rate;
 	}
 	
@@ -98,7 +85,7 @@ public class QOSThrottlingStrategy implements ThrottlingStrategy, AutoCloseable 
 				
 				stats.set(new Stats(mean, stddev, historySize));
 			} catch (IOException e) {
-				
+				// TODO: handle frequent IOExceptions
 			}
 		}
 	}
@@ -113,5 +100,108 @@ public class QOSThrottlingStrategy implements ThrottlingStrategy, AutoCloseable 
 			this.stddev = stddev;
 			this.samples = samples;
 		}
+	}
+	
+	protected interface State {
+		public State process(QOSThrottlingStrategy c);
+	}
+	
+	protected enum States implements State {
+		BASELINING() {
+			protected static final int HISTORY_LENGTH = 64;
+			
+			@Override
+			public State process(QOSThrottlingStrategy c) {
+				if (c.workerFuture == null) {
+					c.workerFuture = c.executor.scheduleWithFixedDelay(c.new Worker(HISTORY_LENGTH), 0, 800, TimeUnit.MILLISECONDS);
+					c.rate = 2048;
+				}
+				
+				Stats stats = c.stats.getAndSet(null);
+				if (stats != null && stats.samples == HISTORY_LENGTH) {
+					c.baselineStats = stats;
+					return THROTTLING_UP;
+				}
+				
+				return this;
+			}
+		},
+		
+		THROTTLING_UP() {
+			protected static final int HISTORY_LENGTH = 5;
+			
+			@Override
+			public State process(QOSThrottlingStrategy c) {
+				if (c.workerFuture == null) {
+					c.workerFuture = c.executor.scheduleWithFixedDelay(c.new Worker(HISTORY_LENGTH), 0, 800, TimeUnit.MILLISECONDS);
+				}
+				
+				Stats stats = c.stats.getAndSet(null);
+				if (stats != null && stats.samples == HISTORY_LENGTH) {
+					if (stats.mean > c.baselineStats.mean + c.baselineStats.stddev) {
+						c.rate *= .9;
+						c.workerFuture.cancel(true);
+						c.workerFuture = null;
+						return HOLDING;
+					} else {
+						c.rate *= 1.125;
+					}
+				}
+				
+				return this;
+			}
+		},
+		
+		THROTTLING_DOWN() {
+			protected static final int HISTORY_LENGTH = 5;
+			
+			@Override
+			public State process(QOSThrottlingStrategy c) {
+				if (c.workerFuture == null) {
+					c.workerFuture = c.executor.scheduleWithFixedDelay(c.new Worker(HISTORY_LENGTH), 0, 800, TimeUnit.MILLISECONDS);
+				}
+				
+				Stats stats = c.stats.getAndSet(null);
+				if (stats != null && stats.samples == HISTORY_LENGTH) {
+					if (stats.mean > c.baselineStats.mean + c.baselineStats.stddev) {
+						c.rate *= .98;
+					} else {
+						c.workerFuture.cancel(true);
+						c.workerFuture = null;
+						return HOLDING;
+					}
+				}
+				
+				return this;
+			}
+		},
+		
+		HOLDING() {
+			protected static final int HISTORY_LENGTH = 10;
+			
+			@Override
+			public State process(QOSThrottlingStrategy c) {
+				if (c.workerFuture == null) {
+					c.workerFuture = c.executor.scheduleWithFixedDelay(c.new Worker(HISTORY_LENGTH), 0, 5000, TimeUnit.MILLISECONDS);
+				}
+				
+				Stats stats = c.stats.getAndSet(null);
+				if (stats != null) {
+					if (stats.samples >= HISTORY_LENGTH / 2 && stats.mean > c.baselineStats.mean + c.baselineStats.stddev) {
+						c.workerFuture.cancel(true);
+						c.workerFuture = null;
+						return THROTTLING_DOWN;
+					} else if (stats.samples == HISTORY_LENGTH && stats.mean < c.baselineStats.mean + c.baselineStats.stddev / 2) {
+						c.workerFuture.cancel(true);
+						c.workerFuture = null;
+						return THROTTLING_UP;
+					}
+				}
+				
+				// TODO: occasionally throttle down (or rebaseline)
+				
+				return this;
+			}
+		},
 	}
 }
