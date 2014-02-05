@@ -7,15 +7,21 @@ import java.util.Objects;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 
 import glacierpipe.io.ThrottledInputStream.ThrottlingStrategy;
 
 public class QOSThrottlingStrategy implements ThrottlingStrategy, AutoCloseable {
 
+	protected final int historyLength;
 	protected final ScheduledExecutorService executor = Executors.newSingleThreadScheduledExecutor();
 	protected final URL url;
 	
-	protected volatile Stats stats = new Stats(0, Double.MAX_VALUE);
+	protected double rate = 2048.0;
+	
+	protected final AtomicReference<Stats> stats = new AtomicReference<QOSThrottlingStrategy.Stats>(new Stats(0, Double.MAX_VALUE, 0));
+
+	protected Stats baselineStats = null;
 	
 	
 	public QOSThrottlingStrategy(URL url) {
@@ -30,14 +36,31 @@ public class QOSThrottlingStrategy implements ThrottlingStrategy, AutoCloseable 
 
 	@Override
 	public double getBytesPerSecond() {
-		// TODO Auto-generated method stub
-		return 0;
+		Stats stats = this.stats.getAndSet(null);
+		if (stats != null) {
+			if (this.baselineStats == null) {
+				if (stats.samples == historyLength) {
+					this.baselineStats = stats;
+				}
+			} else {
+				if and last 5 all in 3 stddevs, increase
+				if last 5 all outside 2 stddevs, decrase
+				
+				
+			}
+		}
+
+		return rate;
 	}
 	
 	protected class Worker implements Runnable {
-		protected final long[] history = new long[64];
+		protected final long[] history;
 		protected int historyStart = 0;
 		protected int historySize = 0;
+		
+		public Worker(int historyLength) {
+			history = new long[historyLength];
+		}
 		
 		@Override
 		public void run() {
@@ -73,7 +96,7 @@ public class QOSThrottlingStrategy implements ThrottlingStrategy, AutoCloseable 
 				
 				stddev = Math.sqrt(stddev);
 				
-				stats = new Stats(mean, stddev);
+				stats.set(new Stats(mean, stddev, historySize));
 			} catch (IOException e) {
 				
 			}
@@ -83,10 +106,12 @@ public class QOSThrottlingStrategy implements ThrottlingStrategy, AutoCloseable 
 	protected static class Stats {
 		public final double mean;
 		public final double stddev;
+		public final int samples;
 		
-		public Stats(double mean, double stddev) {
+		public Stats(double mean, double stddev, int samples) {
 			this.mean = mean;
 			this.stddev = stddev;
+			this.samples = samples;
 		}
 	}
 }
