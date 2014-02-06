@@ -27,7 +27,7 @@ public class QOSThrottlingStrategy implements ThrottlingStrategy, AutoCloseable 
 	protected Stats baselineStats = null;
 	protected long startedHolding = 0;
 	
-	protected double rate = 2048.0;
+	protected double rate = 16384.0;
 	
 	protected State state = States.BASELINING;
 	
@@ -36,7 +36,7 @@ public class QOSThrottlingStrategy implements ThrottlingStrategy, AutoCloseable 
 	}
 
 	@Override
-	public void close() throws Exception {
+	public void close() {
 		this.executor.shutdownNow();
 	}
 
@@ -44,6 +44,24 @@ public class QOSThrottlingStrategy implements ThrottlingStrategy, AutoCloseable 
 	public double getBytesPerSecond() {
 		this.state = state.process(this);
 		return rate;
+	}
+	
+	protected long getLatency() {
+		try {
+			long time = System.nanoTime();
+			HttpURLConnection connection = (HttpURLConnection)url.openConnection();
+			connection.connect();
+			try {
+				connection.getResponseCode();
+				time = System.nanoTime() - time;
+			} finally {
+				connection.disconnect();
+			}
+
+			return time / 1000000;
+		} catch (IOException e) {
+			return -1;
+		}
 	}
 	
 	protected class Worker implements Runnable {
@@ -57,42 +75,31 @@ public class QOSThrottlingStrategy implements ThrottlingStrategy, AutoCloseable 
 		
 		@Override
 		public void run() {
-			try {
-				long time = System.nanoTime();
-				HttpURLConnection connection = (HttpURLConnection)url.openConnection();
-				connection.connect();
-				try {
-					connection.getResponseCode();
-					time = System.nanoTime() - time;
-				} finally {
-					connection.disconnect();
-				}
-				
-				time /= 1000000;
-				
-				history[(historyStart + historySize) % history.length] = time;
-				historySize = Math.min(historySize + 1, history.length);
-				
-				double sum = 0.0;
-				for (int i = historyStart, count = historySize - 1; count >= 0; i = (i + 1) % history.length, count--) {
-					sum += history[i];
-				}
-				
-				double mean = sum / historySize;
-				
-				double stddev = 0.0;
-				
-				for (int i = historyStart, count = historySize - 1; count >= 0; i = (i + 1) % history.length, count--) {
-					double diff = mean - history[i];
-					stddev += diff * diff;
-				}
-				
-				stddev = Math.sqrt(stddev);
-				
-				stats.set(new Stats(mean, stddev, historySize));
-			} catch (IOException e) {
-				// TODO: handle frequent IOExceptions
+			long time = getLatency();
+			
+			history[(historyStart + historySize) % history.length] = time;
+			historySize = Math.min(historySize + 1, history.length);
+			if (historySize == history.length) {
+				historyStart = (historyStart + 1) % history.length;
 			}
+			
+			double sum = 0.0;
+			for (int i = historyStart, count = historySize - 1; count >= 0; i = (i + 1) % history.length, count--) {
+				sum += history[i];
+			}
+			
+			double mean = sum / historySize;
+			
+			double stddev = 0.0;
+			
+			for (int i = historyStart, count = historySize - 1; count >= 0; i = (i + 1) % history.length, count--) {
+				double diff = mean - history[i];
+				stddev += (diff * diff) / historySize;
+			}
+			
+			stddev = Math.sqrt(stddev);
+			
+			stats.set(new Stats(mean, stddev, historySize));
 		}
 	}
 	
@@ -114,7 +121,7 @@ public class QOSThrottlingStrategy implements ThrottlingStrategy, AutoCloseable 
 	
 	protected enum States implements State {
 		BASELINING() {
-			protected static final int HISTORY_LENGTH = 64;
+			protected static final int HISTORY_LENGTH = 40;
 			
 			@Override
 			public State process(QOSThrottlingStrategy c) {
@@ -127,6 +134,8 @@ public class QOSThrottlingStrategy implements ThrottlingStrategy, AutoCloseable 
 				if (stats != null && stats.samples == HISTORY_LENGTH) {
 					c.baselineStats = stats;
 					LOGGER.debug("{} baselined.  mean = {}; stddev = {}", System.identityHashCode(c), stats.mean, stats.stddev);
+					c.workerFuture.cancel(true);
+					c.workerFuture = null;
 					return THROTTLING_UP;
 				}
 				
@@ -152,7 +161,7 @@ public class QOSThrottlingStrategy implements ThrottlingStrategy, AutoCloseable 
 						c.workerFuture = null;
 						return HOLDING;
 					} else {
-						c.rate *= 1.125;
+						c.rate *= 1.1;
 						LOGGER.debug("{} throttling up.  rate {}", System.identityHashCode(c), c.rate);
 					}
 				}
@@ -174,7 +183,7 @@ public class QOSThrottlingStrategy implements ThrottlingStrategy, AutoCloseable 
 				Stats stats = c.stats.getAndSet(null);
 				if (stats != null && stats.samples == HISTORY_LENGTH) {
 					if (stats.mean > c.baselineStats.mean + c.baselineStats.stddev) {
-						c.rate *= .98;
+						c.rate *= .99;
 						LOGGER.debug("{} throttling down.  rate {}", System.identityHashCode(c), c.rate);
 					} else {
 						c.workerFuture.cancel(true);
