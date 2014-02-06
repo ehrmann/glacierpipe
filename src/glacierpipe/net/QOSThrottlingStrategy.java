@@ -1,5 +1,7 @@
 package glacierpipe.net;
 
+import glacierpipe.io.ThrottledInputStream.ThrottlingStrategy;
+
 import java.io.IOException;
 import java.net.HttpURLConnection;
 import java.net.URL;
@@ -10,16 +12,20 @@ import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
-import glacierpipe.io.ThrottledInputStream.ThrottlingStrategy;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class QOSThrottlingStrategy implements ThrottlingStrategy, AutoCloseable {
 
+	protected static final Logger LOGGER = LoggerFactory.getLogger(QOSThrottlingStrategy.class);
+	
 	protected final ScheduledExecutorService executor = Executors.newSingleThreadScheduledExecutor();
 	protected final URL url;
 	
 	protected final AtomicReference<Stats> stats = new AtomicReference<Stats>();
 	protected ScheduledFuture<?> workerFuture = null;
 	protected Stats baselineStats = null;
+	protected long startedHolding = 0;
 	
 	protected double rate = 2048.0;
 	
@@ -114,12 +120,13 @@ public class QOSThrottlingStrategy implements ThrottlingStrategy, AutoCloseable 
 			public State process(QOSThrottlingStrategy c) {
 				if (c.workerFuture == null) {
 					c.workerFuture = c.executor.scheduleWithFixedDelay(c.new Worker(HISTORY_LENGTH), 0, 800, TimeUnit.MILLISECONDS);
-					c.rate = 2048;
+					LOGGER.debug("{} baselining", System.identityHashCode(c));
 				}
 				
 				Stats stats = c.stats.getAndSet(null);
 				if (stats != null && stats.samples == HISTORY_LENGTH) {
 					c.baselineStats = stats;
+					LOGGER.debug("{} baselined.  mean = {}; stddev = {}", System.identityHashCode(c), stats.mean, stats.stddev);
 					return THROTTLING_UP;
 				}
 				
@@ -134,6 +141,7 @@ public class QOSThrottlingStrategy implements ThrottlingStrategy, AutoCloseable 
 			public State process(QOSThrottlingStrategy c) {
 				if (c.workerFuture == null) {
 					c.workerFuture = c.executor.scheduleWithFixedDelay(c.new Worker(HISTORY_LENGTH), 0, 800, TimeUnit.MILLISECONDS);
+					LOGGER.debug("{} throttling up", System.identityHashCode(c));
 				}
 				
 				Stats stats = c.stats.getAndSet(null);
@@ -145,6 +153,7 @@ public class QOSThrottlingStrategy implements ThrottlingStrategy, AutoCloseable 
 						return HOLDING;
 					} else {
 						c.rate *= 1.125;
+						LOGGER.debug("{} throttling up.  rate {}", System.identityHashCode(c), c.rate);
 					}
 				}
 				
@@ -159,12 +168,14 @@ public class QOSThrottlingStrategy implements ThrottlingStrategy, AutoCloseable 
 			public State process(QOSThrottlingStrategy c) {
 				if (c.workerFuture == null) {
 					c.workerFuture = c.executor.scheduleWithFixedDelay(c.new Worker(HISTORY_LENGTH), 0, 800, TimeUnit.MILLISECONDS);
+					LOGGER.debug("{} throttling down", System.identityHashCode(c));
 				}
 				
 				Stats stats = c.stats.getAndSet(null);
 				if (stats != null && stats.samples == HISTORY_LENGTH) {
 					if (stats.mean > c.baselineStats.mean + c.baselineStats.stddev) {
 						c.rate *= .98;
+						LOGGER.debug("{} throttling down.  rate {}", System.identityHashCode(c), c.rate);
 					} else {
 						c.workerFuture.cancel(true);
 						c.workerFuture = null;
@@ -178,11 +189,14 @@ public class QOSThrottlingStrategy implements ThrottlingStrategy, AutoCloseable 
 		
 		HOLDING() {
 			protected static final int HISTORY_LENGTH = 10;
+			protected static final long MAX_HOLD_MS = 10 * 60 * 1000;
 			
 			@Override
 			public State process(QOSThrottlingStrategy c) {
 				if (c.workerFuture == null) {
 					c.workerFuture = c.executor.scheduleWithFixedDelay(c.new Worker(HISTORY_LENGTH), 0, 5000, TimeUnit.MILLISECONDS);
+					c.startedHolding = System.currentTimeMillis();
+					LOGGER.debug("{} holding at {}", System.identityHashCode(c), c.rate);
 				}
 				
 				Stats stats = c.stats.getAndSet(null);
@@ -190,15 +204,21 @@ public class QOSThrottlingStrategy implements ThrottlingStrategy, AutoCloseable 
 					if (stats.samples >= HISTORY_LENGTH / 2 && stats.mean > c.baselineStats.mean + c.baselineStats.stddev) {
 						c.workerFuture.cancel(true);
 						c.workerFuture = null;
+						c.startedHolding = 0;
 						return THROTTLING_DOWN;
 					} else if (stats.samples == HISTORY_LENGTH && stats.mean < c.baselineStats.mean + c.baselineStats.stddev / 2) {
 						c.workerFuture.cancel(true);
 						c.workerFuture = null;
+						c.startedHolding = 0;
 						return THROTTLING_UP;
+					} else if (System.currentTimeMillis() - c.startedHolding > MAX_HOLD_MS) {
+						c.workerFuture.cancel(true);
+						c.workerFuture = null;
+						c.startedHolding = 0;
+						c.rate *= 0.5;
+						return BASELINING;
 					}
 				}
-				
-				// TODO: occasionally throttle down (or rebaseline)
 				
 				return this;
 			}
