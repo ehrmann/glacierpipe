@@ -93,6 +93,13 @@ public class GlacierPipeMain {
 		OptionBuilder.withDescription("the maximum number of times to retry uploading a chunk");
 		OptionBuilder.hasArg();
 		OPTIONS.addOption(OptionBuilder.create("r"));
+		
+		OptionBuilder.withLongOpt("max-upload-rate");
+		OptionBuilder.withArgName("[Bps | automatic]");
+		OptionBuilder.withDescription("the maximum upload rate");
+		OptionBuilder.hasArg();
+		OptionBuilder.isRequired(false);
+		OPTIONS.addOption(OptionBuilder.create());
 
 		OPTIONS.addOption(null, "credentials", true, "path to your aws credentials file (default: $HOME/aws.properties)");
 	}
@@ -139,10 +146,17 @@ public class GlacierPipeMain {
 			String archive = archiveList.get(0).toString();
 			
 			// Throttling
-			// TODO:
-			double rate = Double.NaN;
+			double maxUploadRate = Double.NaN;
 			boolean useQOS = false;
-			
+			String maxUploadRateStr = (String)cmd.getOptionValue("max-upload-rate");
+			if (maxUploadRateStr != null) {
+				if ("automatic".equals(maxUploadRateStr)) {
+					useQOS = true;
+				} else {
+					maxUploadRate = Double.parseDouble(maxUploadRateStr);
+				}
+			}
+
 			// Credentials
 			String credentialsFile = cmd.getOptionValue("credentials", System.getProperty("user.home") + File.separator + "aws.properties");
 			Properties credentialsProperties = new Properties();
@@ -168,8 +182,8 @@ public class GlacierPipeMain {
 				
 				
 				GlacierPipe pipe;
-				if (!Double.isNaN(rate)) {
-					pipe = new GlacierPipe(buffer, observer, maxRetries, new FixedThrottlingStrategy(rate));
+				if (!Double.isNaN(maxUploadRate)) {
+					pipe = new GlacierPipe(buffer, observer, maxRetries, new FixedThrottlingStrategy(maxUploadRate));
 				} else if (qosStrategy != null) {
 					pipe = new GlacierPipe(buffer, observer, maxRetries, qosStrategy);
 				} else {
