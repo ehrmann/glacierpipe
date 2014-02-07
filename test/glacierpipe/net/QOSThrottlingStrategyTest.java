@@ -22,10 +22,10 @@ public class QOSThrottlingStrategyTest {
 			
 			while (System.currentTimeMillis() - start < 240000) {
 				if (bps < 1200000) {
-					qos.latency = 50 + random.nextInt(15);
+					qos.latency = 50 + Math.round(10.0 * bps / 1200000) + random.nextInt(15);
 				} else {
 					double a = 2.0 / 900000000.0;
-					double latency = a * Math.pow(bps - 1200000.0, 2) + 50.0 + random.nextInt(15);
+					double latency = a * Math.pow(bps - 1200000.0, 2) + 60.0 + random.nextInt(15);
 					qos.latency = Math.round(latency);
 				}
 				

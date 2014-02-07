@@ -19,6 +19,20 @@ public class QOSThrottlingStrategy implements ThrottlingStrategy, AutoCloseable 
 
 	protected static final Logger LOGGER = LoggerFactory.getLogger(QOSThrottlingStrategy.class);
 	
+	protected static final double INITIAL_BASELINE_RATE;
+	static {
+		double initialBaselineRate = 16384.0;
+		String rate = System.getProperty(QOSThrottlingStrategy.class.getCanonicalName() + ".initialBaselineRate");
+		if (rate != null) {
+			try {
+				initialBaselineRate = Double.parseDouble(rate);
+			} catch (NumberFormatException e) { }
+		}
+		
+		INITIAL_BASELINE_RATE = initialBaselineRate;
+	}
+	
+	
 	protected final ScheduledExecutorService executor = Executors.newSingleThreadScheduledExecutor();
 	protected final URL url;
 	
@@ -155,7 +169,7 @@ public class QOSThrottlingStrategy implements ThrottlingStrategy, AutoCloseable 
 				
 				Stats stats = c.stats.getAndSet(null);
 				if (stats != null && stats.samples == HISTORY_LENGTH) {
-					if (stats.mean > c.baselineStats.mean + c.baselineStats.stddev) {
+					if (stats.mean > c.baselineStats.mean + c.baselineStats.stddev * 2) {
 						c.rate *= .9;
 						c.workerFuture.cancel(true);
 						c.workerFuture = null;

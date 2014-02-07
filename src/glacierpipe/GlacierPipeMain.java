@@ -21,6 +21,8 @@ package glacierpipe;
 
 import glacierpipe.io.IOBuffer;
 import glacierpipe.io.MemoryIOBuffer;
+import glacierpipe.net.FixedThrottlingStrategy;
+import glacierpipe.net.QOSThrottlingStrategy;
 import glacierpipe.terminal.TerminalGlacierPipeObserver;
 
 import java.io.BufferedInputStream;
@@ -29,6 +31,7 @@ import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.PrintWriter;
+import java.net.URL;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -135,6 +138,11 @@ public class GlacierPipeMain {
 			
 			String archive = archiveList.get(0).toString();
 			
+			// Throttling
+			// TODO:
+			double rate = Double.NaN;
+			boolean useQOS = false;
+			
 			// Credentials
 			String credentialsFile = cmd.getOptionValue("credentials", System.getProperty("user.home") + File.separator + "aws.properties");
 			Properties credentialsProperties = new Properties();
@@ -154,9 +162,20 @@ public class GlacierPipeMain {
 			try (
 					InputStream in = new BufferedInputStream(System.in, 4096);
 					PrintWriter writer = new PrintWriter(System.err);
+					QOSThrottlingStrategy qosStrategy = useQOS ? new QOSThrottlingStrategy(new URL(endpoint.replaceFirst("(?i)(?<=^http)s(?=:)", ""))) : null;
 			) {
 				TerminalGlacierPipeObserver observer = new TerminalGlacierPipeObserver(writer);
-				GlacierPipe pipe = new GlacierPipe(buffer, observer, maxRetries);
+				
+				
+				GlacierPipe pipe;
+				if (!Double.isNaN(rate)) {
+					pipe = new GlacierPipe(buffer, observer, maxRetries, new FixedThrottlingStrategy(rate));
+				} else if (qosStrategy != null) {
+					pipe = new GlacierPipe(buffer, observer, maxRetries, qosStrategy);
+				} else {
+					pipe = new GlacierPipe(buffer, observer, maxRetries);
+				}
+				
 				pipe.pipe(client, vault, archive, in);
 			}
 			

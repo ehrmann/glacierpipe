@@ -24,6 +24,8 @@ import glacierpipe.io.InputStreamObserver;
 import glacierpipe.io.ObservedInputStream;
 import glacierpipe.io.ObservedOutputStream;
 import glacierpipe.io.OutputStreamObserver;
+import glacierpipe.io.ThrottledInputStream;
+import glacierpipe.io.ThrottledInputStream.ThrottlingStrategy;
 import glacierpipe.security.TreeHashMessageDigest;
 
 import java.io.IOException;
@@ -53,8 +55,13 @@ public class GlacierPipe {
 	protected final long partSize;
 	protected final IOBuffer buffer;
 	protected final GlacierPipeObserver observer;
-
+	protected final ThrottlingStrategy throttlingStrategy;
+	
 	public GlacierPipe(IOBuffer buffer, GlacierPipeObserver observer, int maxRetries) {
+		this(buffer, observer, maxRetries, null);
+	}
+	
+	public GlacierPipe(IOBuffer buffer, GlacierPipeObserver observer, int maxRetries, ThrottlingStrategy throttlingStrategy) {
 		long partSize = buffer.getCapacity();
 
 		if (partSize < 0) {
@@ -71,6 +78,7 @@ public class GlacierPipe {
 		this.buffer = buffer;
 		this.observer = observer;
 		this.maxRetries = maxRetries;
+		this.throttlingStrategy = throttlingStrategy;
 	}
 
 	public String pipe(AmazonGlacierClient client, String vaultName, String archiveDesc, InputStream in) throws IOException {
@@ -128,7 +136,8 @@ public class GlacierPipe {
 				do {
 					try (
 							InputStream bufferIn = this.buffer.getInputStream();
-							InputStream observedIn = new ObservedInputStream(bufferIn, new UploadObserver(this.observer, partId));
+							InputStream throttledIn = this.throttlingStrategy != null ? new ThrottledInputStream(bufferIn, this.throttlingStrategy) : bufferIn;
+							InputStream observedIn = new ObservedInputStream(throttledIn, new UploadObserver(this.observer, partId));
 					) {
 
 						UploadMultipartPartRequest partRequest = new UploadMultipartPartRequest().
