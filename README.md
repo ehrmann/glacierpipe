@@ -1,8 +1,10 @@
 # glacierpipe
 ===========
 
-glacierpipe is a command line tool for piping data from stdin to an archive on Amazon Glacier.
-Its arguments are compatible with [MoriTanosuke's glacieruploader](https://github.com/MoriTanosuke/glacieruploader/).
+```glacierpipe``` is a command line tool for piping data from ```stdin``` to an archive on Amazon Glacier, generally as part of a
+backup process where storing the file on disk prior to uploading is undesirable. 
+
+Its arguments are compatible with [MoriTanosuke's ```glacieruploader```](https://github.com/MoriTanosuke/glacieruploader/).
 
 ##Typical use
 
@@ -20,8 +22,13 @@ java ... glacierpipe.GlacierPipeMain \
 e.g.
 
 ```
-$ tar -c /home | xz | java -jar glacierpipe.jar --upload -e us-east-1 -p 8388608 -v home-backups home.tar.xz
-Upload ID: BuRHlPMY-Vfj37rf0LLUrR9cel9xun6WrwNNrLsoyOFJPGT0Nz3VBWXhLCxpMlO5903NmfEsB0aT0kyc1ZRXnwr03TV_
+$ tar -c /home | xz | java -jar glacierpipe.jar \
+    --upload \
+    -e us-east-1 \
+    -p 8388608 \
+    -v home-backups \
+    home.tar.xz
+Upload ID: BuRHlPMY-Vfj37rf0LLUrR9cel9xun6WrwNNrLsoyOFJPGT0Nz3VBWXhLCxpMlO...
 Part 0, 0 B - ?
   Buffering...
   [ <=>                           ] 8.000 MB 12.491 MB/s in 00.64s
@@ -58,3 +65,13 @@ Part 3, 24.000 MB - ?
   Uploading...
    32% [==========>                    ] 2.598 MB 0.332 MB/s eta 16.44s
 ```
+
+##Building
+```
+$ ant
+```
+
+##Internals
+Entire parts are read from ```stdin```, buffered in memory, and a SHA-256 tree hash computed on them prior to
+upload.  In the event a part fails to upload, since the part was buffered in memory, uploading just that part is
+reattempted.
