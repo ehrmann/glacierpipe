@@ -20,6 +20,8 @@
 package glacierpipe.terminal;
 
 import glacierpipe.GlacierPipeObserver;
+import glacierpipe.format.PrintWriterFormat;
+import glacierpipe.format.StringFormat;
 
 import java.io.PrintWriter;
 import java.io.Writer;
@@ -47,7 +49,7 @@ public class TerminalGlacierPipeObserver implements GlacierPipeObserver {
 	public void startBuffering(int partId) {
 		bytesInPart = 0;
 		
-		writer.printf("Part %d, %s - ?%n", partId, Util.toHumanReadableDataSize(this.totalBytes));
+		writer.printf("Part %d, %s - ?%n", partId, StringFormat.toHumanReadableDataSize(this.totalBytes));
 		writer.println("  Buffering...");
 		
 		progressPrinter = new ProgressPrinter(-1);
@@ -81,7 +83,7 @@ public class TerminalGlacierPipeObserver implements GlacierPipeObserver {
 	@Override
 	public void computedTreeHash(int partId, byte[] treeHash) {
 		writer.print("  Tree Hash: 0x");
-		Util.printHex(writer, treeHash);
+		PrintWriterFormat.printHex(writer, treeHash);
 		writer.println();
 		writer.println();
 	}
@@ -124,7 +126,7 @@ public class TerminalGlacierPipeObserver implements GlacierPipeObserver {
 	@Override
 	public void sleepingBeforeRetry(long sleepingFor) {
 		writer.print("  Sleeping for ");
-		Util.printTime(writer, sleepingFor, false);
+		PrintWriterFormat.printTime(writer, sleepingFor, false);
 		writer.println("...");
 	}
 
@@ -133,16 +135,16 @@ public class TerminalGlacierPipeObserver implements GlacierPipeObserver {
 		writer.print("Done.");
 		
 		writer.print("  Uploaded ");
-		writer.print(Util.toHumanReadableDataSize(totalBytes));
+		writer.print(StringFormat.toHumanReadableDataSize(totalBytes));
 		writer.print(" in ");
-		Util.printTime(writer, System.currentTimeMillis() - startTime, false);
+		PrintWriterFormat.printTime(writer, System.currentTimeMillis() - startTime, false);
 		
 		writer.print(" (");
-		writer.print(Util.toHumanReadableDataSize(totalBytes / ((System.currentTimeMillis() - startTime) / 1000)));
+		writer.print(StringFormat.toHumanReadableDataSize(totalBytes / ((System.currentTimeMillis() - startTime) / 1000)));
 		writer.println(")/s");
 		
 		writer.print("  Tree Hash: 0x");
-		Util.printHex(writer, finalTreeHash);
+		PrintWriterFormat.printHex(writer, finalTreeHash);
 		writer.println();
 		
 		writer.printf("  Location: %s%n", location);

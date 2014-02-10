@@ -26,6 +26,9 @@
 
 package glacierpipe.terminal;
 
+import glacierpipe.format.PrintWriterFormat;
+import glacierpipe.format.StringFormat;
+
 import java.io.PrintWriter;
 
 public class ProgressPrinter {
@@ -141,19 +144,19 @@ public class ProgressPrinter {
 			}
 		}
 		
-		writer.print(Util.toHumanReadableDataSize(current));
+		writer.print(StringFormat.toHumanReadableDataSize(current));
 		writer.print(' ');
 		
 		if (done) {
 			double seconds = (double)(now - start) / 1000000000.0;
-			writer.print(Util.toHumanReadableDataSize(Math.round((double)this.current / seconds)));
+			writer.print(StringFormat.toHumanReadableDataSize(Math.round((double)this.current / seconds)));
 			writer.print("/s in ");
-			Util.printTime(writer, (now - start) / 1000000, false);
+			PrintWriterFormat.printTime(writer, (now - start) / 1000000, false);
 		} else {
 			if (Double.isNaN(rateHistory)) {
 				writer.print("--.-B");
 			} else {
-				writer.print(Util.toHumanReadableDataSize(Math.round(rateHistory)));
+				writer.print(StringFormat.toHumanReadableDataSize(Math.round(rateHistory)));
 			}
 			writer.print("/s ");
 			
@@ -163,11 +166,11 @@ public class ProgressPrinter {
 				if (Double.isNaN(rate) || rate < 1.0) {
 					writer.print("-");
 				} else {
-					Util.printTime(writer, Math.round(1000.0 * (total - current) / rate), false);
+					PrintWriterFormat.printTime(writer, Math.round(1000.0 * (total - current) / rate), false);
 				}
 			} else {
 				writer.print("duration ");
-				Util.printTime(writer, (now - start) / 1000000, false);
+				PrintWriterFormat.printTime(writer, (now - start) / 1000000, false);
 			}
 		}
 	}

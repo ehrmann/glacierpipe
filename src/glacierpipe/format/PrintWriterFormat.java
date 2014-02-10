@@ -17,11 +17,11 @@
  * under the License.
  */
 
-package glacierpipe.terminal;
+package glacierpipe.format;
 
 import java.io.PrintWriter;
 
-public class Util {
+public class PrintWriterFormat {
 	
 	public static void printTime(PrintWriter writer, long ms, boolean printAll) {
 		
@@ -49,24 +49,6 @@ public class Util {
 	public static void printHex(PrintWriter writer, byte[] bytes) {
 		for (byte b : bytes) {
 			writer.printf("%02x", b);
-		}
-	}
-	
-	public static String toHumanReadableDataSize(long bytes) {
-		if (bytes < (1L << 0L) * 128L) {
-			return String.format("%d B", bytes);
-		} else if (bytes < (1L << 10L) * 128L) {
-			return String.format("%.3f KB", (double)bytes / (1L << 10L));
-		} else if (bytes < (1L << 20L) * 128L) {
-			return String.format("%.3f MB", (double)bytes / (1L << 20L));
-		} else if (bytes < (1L << 30L) * 128L) {
-			return String.format("%.3f GB", (double)bytes / (1L << 30L));
-		} else if (bytes < (1L << 40L) * 128L) {
-			return String.format("%.3f TB", (double)bytes / (1L << 40L));
-		} else if (bytes < (1L << 50L) * 128L) {
-			return String.format("%.3f PB", (double)bytes / (1L << 50L));
-		} else {
-			return String.format("%.3f EB", (double)bytes / (1L << 60L));
 		}
 	}
 }
