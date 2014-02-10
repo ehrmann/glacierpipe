@@ -1,12 +1,11 @@
 # glacierpipe
-===========
 
-glacierpipe is a command line tool for piping data from ```stdin``` to an archive on Amazon Glacier, generally as part of a
+glacierpipe is a command line tool for piping data from ```stdin``` to an archive on [Amazon Glacier](http://aws.amazon.com/glacier/‎), generally as part of a
 backup process where storing the file on disk prior to uploading is undesirable. 
 
 Its arguments are compatible with [MoriTanosuke's glacieruploader](https://github.com/MoriTanosuke/glacieruploader/).
 
-##Typical use
+## Typical use
 
 ```
 tar -c <directory> | \
@@ -48,14 +47,44 @@ Part 1, 8.000 MB - ?
    32% [==========>                    ] 2.598 MB 0.332 MB/s eta 16.44s
 ```
 
-##Building
+## Building
 ```
 $ ant
 ```
 
 This will create ```./dist/glacierpipe.jar```.
 
-##Internals
-Entire parts are read from ```stdin```, buffered in memory, and a SHA-256 tree hash computed on them prior to
+## Running
+glacierpipe is packaged with [One-JAR](http://one-jar.sourceforge.net/), so it can be run with the `-jar` option, avoiding classpath and dependency issues.
+
+### Credentials
+Credentials are stored in ```${user.home}/aws.properties``` by default in the following format:
+
+```
+accessKey=your_aws_access_key
+secretKey=your_secret_key
+```
+
+### Command line options
+```
+    --credentials <arg>                     path to your aws credentials
+                                            file (default:
+                                            $HOME/aws.properties)
+ -e,--endpoint <arg>                        URL of the amazon AWS endpoint
+                                            where your vault is
+    --help                                  show help
+    --max-upload-rate <[Bps | automatic]>   the maximum upload rate
+ -p,--partsize <bytes>                      the size of each part for
+                                            multipart uploads.  Must be a
+                                            power of 2 between (inclusive)
+                                            1MB and 4GB (default: 16MB)
+ -r,--max-retries <count>                   the maximum number of times to
+                                            retry uploading a chunk
+ -u,--upload                                upload stdin to glacier
+ -v,--vault <arg>                           Name of your vault
+```
+
+## Internals
+Entire parts are read from ```stdin```, buffered in memory, and a [SHA-256 tree hash](http://docs.aws.amazon.com/amazonglacier/latest/dev/checksum-calculations.html) computed on them prior to
 upload.  In the event a part fails to upload, since the part was buffered in memory, uploading just that part is
 reattempted.
