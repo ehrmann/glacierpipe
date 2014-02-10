@@ -82,7 +82,6 @@ public class GlacierPipeMain {
 		
 		OptionBuilder.withLongOpt("partsize");
 		OptionBuilder.withArgName("bytes");
-		OptionBuilder.withType(Number.class);
 		OptionBuilder.withDescription("the size of each part for multipart uploads.  Must be a power of 2 between (inclusive) 1MB and 4GB (default: 16MB)");
 		OptionBuilder.hasArg();
 		OPTIONS.addOption(OptionBuilder.create("p"));
@@ -124,7 +123,14 @@ public class GlacierPipeMain {
 			}
 			
 			// Set up the part size
-			long partSize = (Long)cmd.getParsedOptionValue("partsize");
+			long partSize;
+			try {
+				// TODO...
+				partSize = Long.parseLong((String)cmd.getParsedOptionValue("partsize"));
+			} catch (NumberFormatException e) {
+				throw new RuntimeException("Illegal partsize", e);
+			}
+			
 			IOBuffer buffer = new MemoryIOBuffer(partSize);
 			
 			// How many times should we retry the upload?
