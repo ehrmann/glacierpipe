@@ -19,6 +19,7 @@
 
 package glacierpipe;
 
+import glacierpipe.format.StringFormat;
 import glacierpipe.io.IOBuffer;
 import glacierpipe.io.MemoryIOBuffer;
 import glacierpipe.net.FixedThrottlingStrategy;
@@ -125,10 +126,9 @@ public class GlacierPipeMain {
 			// Set up the part size
 			long partSize;
 			try {
-				// TODO...
-				partSize = Long.parseLong((String)cmd.getParsedOptionValue("partsize"));
+				partSize = StringFormat.parseBinarySuffixedLong((String)cmd.getParsedOptionValue("partsize"));
 			} catch (NumberFormatException e) {
-				throw new RuntimeException("Illegal partsize", e);
+				throw new ParseException("Illegal partsize");
 			}
 			
 			IOBuffer buffer = new MemoryIOBuffer(partSize);
@@ -201,8 +201,11 @@ public class GlacierPipeMain {
 			
 			System.exit(0);
 		} else {
-			// TODO:
-			
+			try (PrintWriter writer = new PrintWriter(System.err)) {
+				writer.println("No action specified.");
+				printHelp(writer);
+			}
+
 			System.exit(-1);
 		}
 	}
