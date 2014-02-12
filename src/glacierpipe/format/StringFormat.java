@@ -45,7 +45,10 @@ public class StringFormat {
 		}
 	}
 
-	private static final Pattern SIZE_PATTERN = Pattern.compile("((?:-?[1-9]\\d*)|0)\\s*([kmgtpe])?", Pattern.CASE_INSENSITIVE);
+	private static final Pattern LONG_SIZE_PATTERN = Pattern.compile("((?:-?[1-9]\\d*)|0)\\s*([kmgtpe])?", Pattern.CASE_INSENSITIVE);
+	private static final Pattern DOUBLE_SIZE_PATTERN = Pattern.compile("(-?(?:\\d+(?:[.]\\d*)?|[.]\\d+))\\s*([kmgtpe])?", Pattern.CASE_INSENSITIVE);
+double x = 00.0;
+long y = 0025;
 	private static final Map<String, Long> BINAR_SUFFIX_FACTOR_MAP;
 
 	static {
@@ -60,7 +63,7 @@ public class StringFormat {
 	}
 
 	public static long parseBinarySuffixedLong(String s) {
-		Matcher matcher = SIZE_PATTERN.matcher(s);
+		Matcher matcher = LONG_SIZE_PATTERN.matcher(s);
 		if (matcher.matches()) {
 			Long value = Long.parseLong(matcher.group(1));
 			String suffix = matcher.group(2);
@@ -68,7 +71,7 @@ public class StringFormat {
 				Long factor = BINAR_SUFFIX_FACTOR_MAP.get(suffix.toLowerCase());
 				if (factor != null) {
 					// TODO: detect overflow
-					value *= factor;
+					return value * factor;
 				} else {
 					throw new NumberFormatException("Unrecognized suffix: '" + suffix + "'");
 				}
@@ -79,5 +82,26 @@ public class StringFormat {
 			throw new NumberFormatException("Unable to parse binary-suffixed long '" + s + "'");
 		}
 	}
+	
+	public static double parseBinarySuffixedDouble(String s) {
+		Matcher matcher = DOUBLE_SIZE_PATTERN.matcher(s);
+		if (matcher.matches()) {
+			Double value = Double.parseDouble(matcher.group(1));
+			String suffix = matcher.group(2);
+			if (suffix != null) {
+				Long factor = BINAR_SUFFIX_FACTOR_MAP.get(suffix.toLowerCase());
+				if (factor != null) {
+					return value * factor;
+				} else {
+					throw new NumberFormatException("Unrecognized suffix: '" + suffix + "'");
+				}
+			}
+			
+			return value;
+		} else {
+			throw new NumberFormatException("Unable to parse binary-suffixed double '" + s + "'");
+		}
+	}
+
 
 }

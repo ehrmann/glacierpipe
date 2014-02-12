@@ -159,7 +159,7 @@ public class GlacierPipeMain {
 				if ("automatic".equals(maxUploadRateStr)) {
 					useQOS = true;
 				} else {
-					maxUploadRate = Double.parseDouble(maxUploadRateStr);
+					maxUploadRate = StringFormat.parseBinarySuffixedDouble(maxUploadRateStr);
 				}
 			}
 
