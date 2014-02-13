@@ -1,8 +1,16 @@
 package glacierpipe.net;
 
+import glacierpipe.net.QOSThrottlingStrategy.Stats;
+
+import java.io.IOException;
+import java.io.InputStream;
 import java.net.MalformedURLException;
 import java.net.URL;
+import java.util.Map.Entry;
+import java.util.regex.Pattern;
 import java.util.Random;
+import java.util.Scanner;
+import java.util.TreeMap;
 
 import org.junit.Test;
 
@@ -10,6 +18,25 @@ public class QOSThrottlingStrategyTest {
 
 	static {
 		System.setProperty("org.slf4j.simpleLogger.defaultLogLevel", "debug");
+	}
+	
+	protected static final TreeMap<Long, Stats> ADSL_LATENCY_PROFILE = new TreeMap<Long, Stats>();
+	static {
+		try (
+				InputStream in = QOSThrottlingStrategyTest.class.getResourceAsStream("adsl_latency_profile.csv");
+				Scanner scanner = new Scanner(in, "UTF-8");
+		) {
+			scanner.useDelimiter(Pattern.compile("[,\r\n]"));
+			while (scanner.hasNext()) {
+				long kilobytesPerSecond = scanner.nextLong();
+				double mean = scanner.nextDouble();
+				double stddev = scanner.nextDouble();
+				
+				ADSL_LATENCY_PROFILE.put(kilobytesPerSecond * 1024, new Stats(mean, stddev, 1));
+			}
+		} catch (IOException e) {
+			throw new RuntimeException("Error loading adsl_latency_profile.csv", e);
+		}
 	}
 	
 	@Test
@@ -21,14 +48,15 @@ public class QOSThrottlingStrategyTest {
 			double bps = 0.0;
 			
 			while (System.currentTimeMillis() - start < 240000) {
-				if (bps < 1200000) {
-					qos.latency = 50 + Math.round(10.0 * bps / 1200000) + random.nextInt(15);
-				} else {
-					double a = 2.0 / 900000000.0;
-					double latency = a * Math.pow(bps - 1200000.0, 2) + 60.0 + random.nextInt(15);
-					qos.latency = Math.round(latency);
+				Entry<Long, Stats> entry = ADSL_LATENCY_PROFILE.floorEntry(Math.round(bps));
+				if (entry == null) {
+					entry = ADSL_LATENCY_PROFILE.firstEntry();
 				}
 				
+				Stats stats = entry.getValue();
+				
+				qos.latency = Math.max(0, Math.round(stats.mean + random.nextGaussian() * stats.stddev));
+
 				System.err.printf("%.3f KB/s, %d ms\n", bps / 1024.0, qos.latency);
 				
 				bps = qos.getBytesPerSecond() ;
