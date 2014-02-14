@@ -126,7 +126,7 @@ public class GlacierPipeMain {
 			// Set up the part size
 			long partSize;
 			try {
-				partSize = StringFormat.parseBinarySuffixedLong((String)cmd.getParsedOptionValue("partsize"));
+				partSize = StringFormat.parseBinarySuffixedLong((String)cmd.getOptionValue("partsize"));
 			} catch (NumberFormatException e) {
 				throw new ParseException("Illegal partsize");
 			}
