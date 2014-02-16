@@ -7,7 +7,7 @@ public class FixedThrottlingStrategy implements ThrottlingStrategy {
 	protected double rate;
 	
 	public FixedThrottlingStrategy(double rate) {
-		
+		this.rate = rate;
 	}
 	
 	@Override
