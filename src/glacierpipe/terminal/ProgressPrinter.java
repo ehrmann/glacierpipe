@@ -89,14 +89,20 @@ public class ProgressPrinter {
 		
 		long now = System.nanoTime();
 		
-		double rate = (double)(this.current - this.lastCurrent) / ((now - this.lastPrint) / 1000000000.0);
+		// Calculate the current rate and update rateHistory, but only if progress hasn't regressed
+		double rate = Double.NaN;
 		
-		if (Double.isNaN(rateHistory)) {
-			rateHistory = rate;
-		} else {
-			rateHistory = .75 * rateHistory + .25 * rate;
+		if (this.current >= this.lastCurrent) {
+			rate = (double)(this.current - this.lastCurrent) / ((now - this.lastPrint) / 1000000000.0);
+			
+			if (Double.isNaN(rateHistory)) {
+				rateHistory = rate;
+			} else {
+				rateHistory = .75 * rateHistory + .25 * rate;
+			}
 		}
 		
+		// Print the progress bar
 		int totalMarks = this.width - 50;
 		
 		if (total >= 0) {
@@ -144,9 +150,11 @@ public class ProgressPrinter {
 			}
 		}
 		
+		// Print the current size
 		writer.print(StringFormat.toHumanReadableDataSize(current));
 		writer.print(' ');
 		
+		// Print rate/time
 		if (done) {
 			double seconds = (double)(now - start) / 1000000000.0;
 			writer.print(StringFormat.toHumanReadableDataSize(Math.round((double)this.current / seconds)));
@@ -166,12 +174,16 @@ public class ProgressPrinter {
 				if (Double.isNaN(rate) || rate < 1.0) {
 					writer.print("-");
 				} else {
-					PrintWriterFormat.printTime(writer, Math.round(1000.0 * (total - current) / rate), false);
+					PrintWriterFormat.printTime(writer, Math.round(1000.0 * (total - current) / rateHistory), false);
 				}
 			} else {
 				writer.print("duration ");
 				PrintWriterFormat.printTime(writer, (now - start) / 1000000, false);
 			}
 		}
+		
+		// Record keeping
+		this.lastCurrent = current;
+		this.lastPrint = now;
 	}
 }
