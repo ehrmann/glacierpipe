@@ -7,10 +7,12 @@ import java.util.Objects;
 
 public class ThrottledInputStream extends FilterInputStream {
 
-	protected long budget;
+	private long budget;
+	private long usage = 0;
 	
-	long lastUsed = 0;
-	long[] usage = new long[10];
+	private long lastUsed = 0;
+	private int quantaPerSecond = 10;
+	
 	protected final ThrottlingStrategy throttlingStrategy;
 	
 	public ThrottledInputStream(InputStream in, double bytesPerSecond) {
@@ -35,7 +37,7 @@ public class ThrottledInputStream extends FilterInputStream {
 		} else if (Double.isInfinite(bytesPerSecond)) {
 			this.budget = Long.MAX_VALUE;
 		} else {
-			this.budget = Math.max(0, Math.round(bytesPerSecond / usage.length));
+			this.budget = Math.max(0, Math.round(bytesPerSecond / quantaPerSecond));
 		}
 	}
 	
@@ -44,10 +46,15 @@ public class ThrottledInputStream extends FilterInputStream {
 		if (bytesPerSecond <= 0 || Double.isInfinite(bytesPerSecond) || Double.isNaN(bytesPerSecond)) {
 			this.budget = Long.MAX_VALUE;
 		} else {
-			this.budget = Math.max(0, Math.round(bytesPerSecond / usage.length));
+			this.budget = Math.max(0, Math.round(bytesPerSecond / quantaPerSecond));
 		}
 	}
 	
+	@Override
+	public int available() throws IOException {
+		return Math.min(super.available(), (int)Math.min(getMaxRead(System.currentTimeMillis()), Integer.MAX_VALUE));
+	}
+
 	@Override
 	public int read() throws IOException {
 		while (true) {
@@ -60,6 +67,8 @@ public class ThrottledInputStream extends FilterInputStream {
 				return r;
 			} else {
 				if (this.throttlingStrategy != null) {
+					// FIXME: this.setBytesPerSecond() only gets called when we're about to block, so it's never
+					// refreshed over slow read() calls or when the budget is large.  Likewise for the other read().
 					this.setBytesPerSecond();
 				}
 				
@@ -73,7 +82,7 @@ public class ThrottledInputStream extends FilterInputStream {
 		while (true) {
 			long now = System.currentTimeMillis();
 			int maxRead = (int)Math.min(getMaxRead(now), Integer.MAX_VALUE);
-			if (maxRead > 0) {
+			if (maxRead > 0 || len == 0) {
 				int r = super.read(b, off, Math.min(len, maxRead));
 				if (r >= 0) {
 					markUsed(now, r);
@@ -90,36 +99,40 @@ public class ThrottledInputStream extends FilterInputStream {
 	}
 
 	protected long getMaxRead(long currentTime) {
-		int lastIndex = ((int)(this.lastUsed % 1000) * usage.length) / 1000;
-		int index = ((int)(currentTime % 1000) * usage.length) / 1000;
+		if (currentTime - this.lastUsed >= 1000) {
+			return budget;
+		}
 		
-		if (lastIndex == index) {
-			return budget - usage[index];
+		int lastQuantum = ((int)(this.lastUsed % 1000) * quantaPerSecond) / 1000;
+		int currentQuantum = ((int)(currentTime % 1000) * quantaPerSecond) / 1000;
+		
+		if (lastQuantum == currentQuantum) {
+			return budget - usage;
 		} else {
 			return budget;
 		}
 	}
 	
 	protected void markUsed(long currentTime, long used) {
-		int lastIndex = ((int)(this.lastUsed % 1000) * usage.length) / 1000;
-		int index = ((int)(currentTime % 1000) * usage.length) / 1000;
+		int lastQuantum = ((int)(this.lastUsed % 1000) * quantaPerSecond) / 1000;
+		int currentQuantum = ((int)(currentTime % 1000) * quantaPerSecond) / 1000;
 		
-		if (lastIndex != index) {
-			usage[index] = 0;
+		if (lastQuantum != currentQuantum || currentTime - this.lastUsed >= 1000) {
+			this.usage = 0;
 		}
 
-		usage[index] += used;
+		this.usage += used;
 		
 		this.lastUsed = currentTime;
 	}
 	
 	protected void sleepUntilNextChunk(long currentTime) throws IOException {
-		long thisChunk = currentTime % 1000;
-		int index = ((int)thisChunk * usage.length) / 1000;
-		long nextChunkStart = ((index + 1) * 1000) / usage.length;
+		long positionInQuantum = currentTime % 1000;
+		int currentQuantum = ((int)positionInQuantum * quantaPerSecond) / 1000;
+		long nextQuantumStart = ((currentQuantum + 1) * 1000) / quantaPerSecond;
 		
 		try {
-			Thread.sleep(nextChunkStart - thisChunk);
+			Thread.sleep(nextQuantumStart - positionInQuantum);
 		} catch (InterruptedException e) {
 			throw new IOException(e);
 		}
