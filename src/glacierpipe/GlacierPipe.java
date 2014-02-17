@@ -136,7 +136,34 @@ public class GlacierPipe {
 				do {
 					try (
 							InputStream bufferIn = this.buffer.getInputStream();
-							InputStream throttledIn = this.throttlingStrategy != null ? new ThrottledInputStream(bufferIn, this.throttlingStrategy) : bufferIn;
+							
+							// KLUDGE: Throttling really belongs closer to EntitySerializer.serialize(), but there
+							// wasn't an easy hook for it.  Throttling on input would work well enough, but
+							// client.uploadMultipartPart() calculates a SHA-256 checksum on the request before it
+							// sends it, then calls reset() on the stream.  Because we know this, don't throttle until
+							// reset() has been called at least once.
+							InputStream throttledIn = this.throttlingStrategy == null ? bufferIn : new ThrottledInputStream(bufferIn, this.throttlingStrategy) {
+								private long resets = 0;
+								
+								@Override
+								public void setBytesPerSecond() {
+									if (this.resets > 0) {
+										super.setBytesPerSecond();
+									}
+								}
+								
+								@Override
+								protected long getMaxRead(long currentTime) {
+									return this.resets > 0 ? super.getMaxRead(currentTime) : Long.MAX_VALUE;
+								}
+								
+								@Override
+								public synchronized void reset() throws IOException {
+									super.reset();
+									this.resets++;
+								}
+							};
+							
 							InputStream observedIn = new ObservedInputStream(throttledIn, new UploadObserver(this.observer, partId));
 					) {
 
