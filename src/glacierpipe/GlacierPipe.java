@@ -68,7 +68,7 @@ public class GlacierPipe {
 			throw new IllegalArgumentException("partSize too small");
 		} else if (partSize > 1024L * 1024L * 1024L * 4L) {
 			throw new IllegalArgumentException("partSize larger than 4GB");
-		} else if (!isPowerOfTwo(partSize) || partSize % (1024 * 1024) != 0) {
+		} else if (!Config.isPowerOfTwo(partSize) || partSize % (1024 * 1024) != 0) {
 			throw new IllegalArgumentException("partSize not 1MB * 2^n");
 		} else if (maxRetries < 1) {
 			throw new IllegalArgumentException("maxRetries must be at least 1");
@@ -233,19 +233,6 @@ public class GlacierPipe {
 		} catch (NoSuchAlgorithmException e) {
 			throw new RuntimeException("SHA-256 not available", e);
 		}
-	}
-
-	private static boolean isPowerOfTwo(long val) {
-		val--;
-
-		while (val > 0) {
-			if ((val & 1) != 1) {
-				return false;
-			}
-			val >>= 1;
-		}
-
-		return true;
 	}
 
 	protected static class AbstractObserverAdapter {

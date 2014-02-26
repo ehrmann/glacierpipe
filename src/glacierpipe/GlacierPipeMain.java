@@ -19,26 +19,19 @@
 
 package glacierpipe;
 
-import glacierpipe.format.StringFormat;
 import glacierpipe.io.IOBuffer;
 import glacierpipe.io.MemoryIOBuffer;
-import glacierpipe.net.FixedThrottlingStrategy;
-import glacierpipe.net.QOSThrottlingStrategy;
 import glacierpipe.terminal.TerminalGlacierPipeObserver;
 
 import java.io.BufferedInputStream;
-import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.PrintWriter;
-import java.net.URL;
-import java.util.Collections;
+import java.util.Iterator;
 import java.util.List;
-import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Properties;
-import java.util.TreeMap;
 
 import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.CommandLineParser;
@@ -54,20 +47,6 @@ import com.amazonaws.auth.BasicAWSCredentials;
 import com.amazonaws.services.glacier.AmazonGlacierClient;
 
 public class GlacierPipeMain {
-
-	public static final Map<String, String> GLACIER_ENDPOINTS;
-	static {
-		Map<String, String> glacierEndpoints = new TreeMap<String, String>();
-
-		glacierEndpoints.put("us-east-1", "https://glacier.us-east-1.amazonaws.com/");
-		glacierEndpoints.put("us-west-2", "https://glacier.us-west-2.amazonaws.com/");
-		glacierEndpoints.put("us-west-1", "https://glacier.us-west-1.amazonaws.com/");
-		glacierEndpoints.put("eu-west-1", "https://glacier.eu-west-1.amazonaws.com/");
-		glacierEndpoints.put("ap-southeast-2", "https://glacier.ap-southeast-2.amazonaws.com/");
-		glacierEndpoints.put("ap-northeast-1", "https://glacier.ap-northeast-1.amazonaws.com/");
-
-		GLACIER_ENDPOINTS = Collections.unmodifiableMap(glacierEndpoints);
-	}
 	
 	public static final Options OPTIONS = new Options();
 	static {
@@ -102,6 +81,8 @@ public class GlacierPipeMain {
 		OPTIONS.addOption(OptionBuilder.create());
 
 		OPTIONS.addOption(null, "credentials", true, "path to your aws credentials file (default: $HOME/aws.properties)");
+		
+		OPTIONS.addOption(null, "reload-properties", false, "reload properties file on change, possibly changing the current configuration");
 	}
 	
 	public static void main(String[] args) throws IOException, ParseException {
@@ -117,86 +98,71 @@ public class GlacierPipeMain {
 			System.exit(0);
 		} else if (cmd.hasOption("upload")) {
 			
-			// Endpoint
-			String endpoint = cmd.getOptionValue("endpoint");
-			if (GLACIER_ENDPOINTS.containsKey(endpoint)) {
-				endpoint = GLACIER_ENDPOINTS.get(endpoint);
+			// Turn the CommandLine into Properties
+			Properties cliProperties = new Properties();
+			for (Iterator<?> i = cmd.iterator(); i.hasNext(); ) {
+				Option o = (Option)i.next();
+				
+				String opt = o.getLongOpt();
+				opt = opt != null ? opt : o.getOpt();
+				
+				String value = o.getValue();
+				value = value != null ? value : "";
+				
+				cliProperties.setProperty(opt, value);
 			}
 			
-			// Set up the part size
-			long partSize;
-			try {
-				partSize = StringFormat.parseBinarySuffixedLong((String)cmd.getOptionValue("partsize"));
-			} catch (NumberFormatException e) {
-				throw new ParseException("Illegal partsize");
-			}
-			
-			IOBuffer buffer = new MemoryIOBuffer(partSize);
-			
-			// How many times should we retry the upload?
-			// At ~5 min between attempts, 1000 works out to 3.5 days
-			int maxRetries = 1000;
-			if (cmd.getParsedOptionValue("max-retries") != null) {
-				maxRetries = ((Number)cmd.getParsedOptionValue("max-retries")).intValue();
-			}
-			
-			// Vault name
-			String vault = (String)cmd.getOptionValue("vault");
+			// Build up a configuration
+			ConfigBuilder configBuilder = new ConfigBuilder();
 			
 			// Archive name
 			List<?> archiveList = cmd.getArgList();
-			if (archiveList.size() != 1) {
+			if (archiveList.size() > 1) {
+				throw new ParseException("Too many arguments");
+			} else if (archiveList.isEmpty()) {
 				throw new ParseException("No archive name provided");
+			}			
+			
+			configBuilder.setArchive(archiveList.get(0).toString());
+			
+			// All other arguments on the command line
+			configBuilder.setFromProperties(cliProperties);
+			
+			// Load any config from the properties file
+			Properties fileProperties = new Properties();
+			try (InputStream in = new FileInputStream(configBuilder.propertiesFile)) {
+				fileProperties.load(in);
+			} catch (IOException e) {
+				System.err.printf("Warning: unable to read properties file %s; %s%n", configBuilder.propertiesFile, e);
 			}
 			
-			String archive = archiveList.get(0).toString();
+			configBuilder.setFromProperties(fileProperties);
 			
-			// Throttling
-			double maxUploadRate = Double.NaN;
-			boolean useQOS = false;
-			String maxUploadRateStr = (String)cmd.getOptionValue("max-upload-rate");
-			if (maxUploadRateStr != null) {
-				if ("automatic".equals(maxUploadRateStr)) {
-					useQOS = true;
-				} else {
-					maxUploadRate = StringFormat.parseBinarySuffixedDouble(maxUploadRateStr);
-				}
-			}
+			// ...
+			Config config = new Config(configBuilder);
 
-			// Credentials
-			String credentialsFile = cmd.getOptionValue("credentials", System.getProperty("user.home") + File.separator + "aws.properties");
-			Properties credentialsProperties = new Properties();
+			IOBuffer buffer = new MemoryIOBuffer(config.partSize);			
 			
-			try (InputStream in = new FileInputStream(credentialsFile)) {
-				credentialsProperties.load(in);
-			}
-			
-			String accessKey = credentialsProperties.getProperty("accessKey");
-			String secretKey = credentialsProperties.getProperty("secretKey");
-			
-			// Set up the client
-			AmazonGlacierClient client = new AmazonGlacierClient(new BasicAWSCredentials(accessKey, secretKey));
-			client.setEndpoint(endpoint);
+			AmazonGlacierClient client = new AmazonGlacierClient(new BasicAWSCredentials(config.accessKey, config.secretKey));
+			client.setEndpoint(config.endpoint);
 
 			// Actual upload
 			try (
 					InputStream in = new BufferedInputStream(System.in, 4096);
 					PrintWriter writer = new PrintWriter(System.err);
-					QOSThrottlingStrategy qosStrategy = useQOS ? new QOSThrottlingStrategy(new URL(endpoint.replaceFirst("(?i)(?<=^http)s(?=:)", ""))) : null;
+					ObservableProperties configMonitor = config.reloadProperties ? new ObservableProperties(config.propertiesFile) : null;
+					ProxyingThrottlingStrategy throttlingStrategy = new ProxyingThrottlingStrategy(config);
 			) {
 				TerminalGlacierPipeObserver observer = new TerminalGlacierPipeObserver(writer);
 				
-				
-				GlacierPipe pipe;
-				if (!Double.isNaN(maxUploadRate)) {
-					pipe = new GlacierPipe(buffer, observer, maxRetries, new FixedThrottlingStrategy(maxUploadRate));
-				} else if (qosStrategy != null) {
-					pipe = new GlacierPipe(buffer, observer, maxRetries, qosStrategy);
-				} else {
-					pipe = new GlacierPipe(buffer, observer, maxRetries);
+				if (configMonitor != null) {
+					configMonitor.registerObserver(throttlingStrategy);
 				}
-				
-				pipe.pipe(client, vault, archive, in);
+					
+				GlacierPipe pipe = new GlacierPipe(buffer, observer, config.maxRetries, throttlingStrategy);				
+				pipe.pipe(client, config.vault, config.archive, in);
+			} catch (Exception e) {
+				e.printStackTrace(System.err);
 			}
 			
 			System.exit(0);
@@ -221,11 +187,10 @@ public class GlacierPipeMain {
 				 null);
 		
 		writer.printf("%nBuild-in endpoint aliases:%n%n");
-		for (Entry<String, String> entry : GLACIER_ENDPOINTS.entrySet()) {
+		for (Entry<String, String> entry : ConfigBuilder.GLACIER_ENDPOINTS.entrySet()) {
 			writer.printf("  %20s %s%n", entry.getKey() + " ->", entry.getValue());
 		}
 		
 		writer.flush();
 	}
-
 }
