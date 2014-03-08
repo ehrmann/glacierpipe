@@ -57,6 +57,8 @@ This will create ```./dist/glacierpipe.jar```.
 ## Running
 glacierpipe is packaged with [One-JAR](http://one-jar.sourceforge.net/), so it can be run with the `-jar` option, avoiding classpath and dependency issues.
 
+[See a demo of glacierpipe in action on Vimeo](https://vimeo.com/88505697)
+
 ### Credentials
 Credentials are stored in ```${user.home}/aws.properties``` by default in the following format:
 
